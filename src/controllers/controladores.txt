@@ -1,0 +1,4 @@
+en esta carpeta van los controladores
+
+
+Este es un archivo de texto nada mas

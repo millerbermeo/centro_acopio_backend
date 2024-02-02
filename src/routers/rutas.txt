@@ -1,0 +1,3 @@
+en esta carpeta van las rutas
+
+Este es un archivo de texto nada mas
