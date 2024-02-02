@@ -54,9 +54,11 @@ export const residuoRegistrar = async (req, res) => {
                 await pool.query(sql)
             }
 
+            const destino = 'centro de acopio'
+
             // Agrega el movimiento a la tabla movimientos
-            const insertMovimientoSql = 'INSERT INTO movimientos (tipo_movimiento, cantidad, fecha, usuario_adm, fk_residuo, fk_actividad) VALUES (?, ?, CURDATE(), ?, ?, ?)';
-            await pool.query(insertMovimientoSql, ['entrada', cantidad, usuario, id_residuo, fk_actividad]);
+            const insertMovimientoSql = 'INSERT INTO movimientos (tipo_movimiento, cantidad, fecha, usuario_adm, fk_residuo, fk_actividad, destino) VALUES (?, ?, CURDATE(), ?, ?, ?, ?)';
+            await pool.query(insertMovimientoSql, ['entrada', cantidad, usuario, id_residuo, fk_actividad, destino]);
 
             const obtenerAlm = `SELECT tope_alm, stock_alm, cantidad_alm FROM almacenamiento WHERE id_almacenamiento = ${fk_alm}`;
             let obtenerDatos = await pool.query(obtenerAlm);
@@ -147,7 +149,7 @@ export const actividadesListar = async (req, res) => {
 
         if (rol === 'administrador') {
 
-            const query = 'SELECT a.fecha_actividad as fecha, ti.nombre_actividad as nombre FROM actividades a JOIN tipos_actividades ti ON a.id_actividad = ti.id_tipo_actividad WHERE estado_actividad = \'asignada\'';
+            const query = 'SELECT * FROM actividades a  WHERE estado_actividad = \'asignada\' AND tipo_actividad = 1';
 
             const [result] = await pool.query(query);
 
@@ -257,7 +259,7 @@ export const residuoRegistrarSalida = async (req, res) => {
 
         if (rol === 'administrador') {
             let id = req.params.id;
-            const { cantidad, usuario } = req.body;
+            const { cantidad, usuario, destino } = req.body;
 
             // Obtener la cantidad actual del residuo
             const obtenerCantidadResiduoSql = 'SELECT cantidad FROM residuos WHERE id_residuo = ?';
@@ -273,8 +275,8 @@ export const residuoRegistrarSalida = async (req, res) => {
             cantidadResiduoActual = Math.max(parseFloat(cantidadResiduoActual) - parseFloat(cantidad), 0);
 
             // Realizar la inserción en la tabla movimientos
-            const sql = `INSERT INTO movimientos (tipo_movimiento, cantidad, fecha, usuario_adm, fk_residuo) VALUES ('salida', ?, CURRENT_TIMESTAMP(), ?, ?)`;
-            await pool.query(sql, [cantidad, usuario, id]);
+            const sql = `INSERT INTO movimientos (tipo_movimiento, cantidad, fecha, usuario_adm, fk_residuo, destino) VALUES ('salida', ?, CURRENT_TIMESTAMP(), ?, ?, ?)`;
+            await pool.query(sql, [cantidad, usuario, id, destino]);
 
             // Actualizar la cantidad del residuo en la tabla residuos
             const sql2 = `UPDATE residuos SET cantidad = ? WHERE id_residuo = ?`;
@@ -333,7 +335,7 @@ export const residuoListarMovimientos = async (req, res) => {
             if (!mes || !year) {
 
                 let query = `
-                SELECT m.id_movimiento, m.tipo_movimiento, m.cantidad, r.unidad_medida, m.fecha, u.nombre as usuario_adm, r.nombre_residuo, ti.nombre_actividad
+                SELECT m.id_movimiento, m.tipo_movimiento, m.cantidad, a.nombre_act, r.unidad_medida, m.fecha, u.nombre as usuario_adm, r.nombre_residuo, ti.nombre_actividad, m.destino
                 FROM movimientos m
                 JOIN residuos r ON m.fk_residuo = r.id_residuo
                 JOIN usuarios u ON m.usuario_adm = u.id_usuario
