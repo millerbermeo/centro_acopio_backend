@@ -23,7 +23,7 @@ export const residuoRegistrar = async (req, res) => {
             // Continue with the registration process
 
             // Verificar si el residuo ya existe
-            const checkResiduoSql = 'SELECT id_residuo, cantidad FROM residuos WHERE nombre_residuo = ?';
+            const checkResiduoSql = 'SELECT id_residuo, cantidad, fk_alm FROM residuos WHERE nombre_residuo = ?';
             const [rows] = await pool.query(checkResiduoSql, [nombre_residuo]);
 
             let id_residuo;
@@ -32,26 +32,18 @@ export const residuoRegistrar = async (req, res) => {
                 // El residuo ya existe, actualiza la cantidad
                 const id_residuo_existente = rows[0].id_residuo;
                 const cantidad_existente = parseFloat(rows[0].cantidad) + parseFloat(cantidad);
+                const alm = rows[0].fk_alm;
 
                 const updateResiduoSql = 'UPDATE residuos SET cantidad = ? WHERE id_residuo = ?';
                 await pool.query(updateResiduoSql, [cantidad_existente, id_residuo_existente]);
 
                 id_residuo = id_residuo_existente;
-
-                let sql = `UPDATE actividades SET estado_actividad = 'terminada' WHERE id_actividad = ${fk_actividad}`
-
-                await pool.query(sql)
-
             } else {
                 // El residuo no existe, agrégalo a la tabla residuos
                 const insertResiduoSql = 'INSERT INTO residuos (nombre_residuo, tipo_residuo, cantidad, unidad_medida, fk_alm) VALUES (?, ?, ?, ?, ?)';
                 const [rows1] = await pool.query(insertResiduoSql, [nombre_residuo, tipo_residuo, cantidad, unidad_medida, fk_alm]);
 
                 id_residuo = rows1.insertId;
-
-                let sql = `UPDATE actividades SET estado_actividad = 'terminada' WHERE id_actividad = ${fk_actividad}`
-
-                await pool.query(sql)
             }
 
             const destino = 'centro de acopio'
@@ -60,24 +52,13 @@ export const residuoRegistrar = async (req, res) => {
             const insertMovimientoSql = 'INSERT INTO movimientos (tipo_movimiento, cantidad, fecha, usuario_adm, fk_residuo, fk_actividad, destino) VALUES (?, ?, CURDATE(), ?, ?, ?, ?)';
             await pool.query(insertMovimientoSql, ['entrada', cantidad, usuario, id_residuo, fk_actividad, destino]);
 
-            const obtenerAlm = `SELECT tope_alm, stock_alm, cantidad_alm FROM almacenamiento WHERE id_almacenamiento = ${fk_alm}`;
-            let obtenerDatos = await pool.query(obtenerAlm);
+            // Actualizar estado de la actividad
+            const updateActividadSql = `UPDATE actividades SET estado_actividad = 'terminada' WHERE id_actividad = ${fk_actividad}`;
+            await pool.query(updateActividadSql);
 
-            // Extract the current tope_alm, stock_alm, and cantidad_alm
-            const currentTopeAlm = obtenerDatos[0][0].tope_alm;
-            const currentStockAlm = obtenerDatos[0][0].stock_alm;
-            const currentCantidadAlm = obtenerDatos[0][0].cantidad_alm;
-
-            // Calculate the difference between tope_alm and cantidad
-            const difference = currentTopeAlm - parseFloat(cantidad);
-
-            // Update cantidad_alm in the almacenamiento table with the incoming cantidad
-            const updateCantidadAlmSql = 'UPDATE almacenamiento SET cantidad_alm = ? WHERE id_almacenamiento = ?';
-            await pool.query(updateCantidadAlmSql, [currentCantidadAlm + cantidad, fk_alm]);
-
-            // Update stock_alm in the almacenamiento table by subtracting the difference
-            const updateStockSql = 'UPDATE almacenamiento SET stock_alm = ? WHERE id_almacenamiento = ?';
-            await pool.query(updateStockSql, [currentStockAlm - parseFloat(cantidad), fk_alm]);
+            // Actualizar cantidad de almacenamiento
+            const updateCantidadAlmSql = 'UPDATE almacenamiento SET cantidad_alm = cantidad_alm + ? WHERE id_almacenamiento = ?';
+            await pool.query(updateCantidadAlmSql, [cantidad, fk_alm]);
 
             res.status(201).json({ success: true, message: "Residuo registrado con éxito." });
         } else {
@@ -88,6 +69,7 @@ export const residuoRegistrar = async (req, res) => {
         res.status(500).json({ success: false, message: "Error interno del servidor." });
     }
 };
+
 
 
 export const tiposResiduos = async (req, res) => {
